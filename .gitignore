@@ -11,6 +11,7 @@ desktop.ini
 
 # Logs and temporary files
 *.log
+__pycache__/
 tmp/
 temp/
 
@@ -18,4 +19,6 @@ temp/
 node_modules/
 dist/
 build/
+install/
+log/
 .cache/

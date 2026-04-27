@@ -30,10 +30,23 @@ const ui = {
   lastPacket: document.querySelector("#lastPacket"),
   eventLog: document.querySelector("#eventLog"),
   clearLogButton: document.querySelector("#clearLogButton"),
+  simSource: document.querySelector("#simSource"),
+  sourceStatus: document.querySelector("#sourceStatus"),
+  bridgeUrl: document.querySelector("#bridgeUrl"),
+  bridgeButton: document.querySelector("#bridgeButton"),
+  bridgeStatus: document.querySelector("#bridgeStatus"),
   scenarioButtons: document.querySelectorAll(".scenario-button")
 };
 
 const ctx = ui.map.getContext("2d");
+
+const bridge = {
+  socket: null,
+  status: "offline",
+  commandAdvertised: false,
+  lastCommandAt: 0,
+  manualClose: false
+};
 
 const scenarios = {
   nominal: {
@@ -94,6 +107,7 @@ const state = {
   estopped: false,
   speedLimit: 0.55,
   scenario: "nominal",
+  simSource: "browser",
   mode: "inspection",
   desired: { x: 0, y: 0 },
   output: { linear: 0, angular: 0 },
@@ -136,12 +150,165 @@ function addEvent(message, level = "info") {
   }
 }
 
+function bridgeStatusText() {
+  if (state.simSource === "browser") return "Offline";
+  if (bridge.status === "connected") return "Connected";
+  if (bridge.status === "connecting") return "Connecting";
+  if (bridge.status === "error") return "Connection error";
+  return "Offline";
+}
+
+function renderBridgeUi() {
+  ui.sourceStatus.textContent = state.simSource === "gazebo" ? "Gazebo bridge" : "Browser demo";
+  ui.sourceStatus.classList.toggle("connected", state.simSource === "gazebo" && bridge.status === "connected");
+  ui.sourceStatus.classList.toggle("warn", state.simSource === "gazebo" && bridge.status === "connecting");
+  ui.sourceStatus.classList.toggle("danger", state.simSource === "gazebo" && bridge.status === "error");
+
+  ui.bridgeStatus.textContent = bridgeStatusText();
+  ui.bridgeStatus.classList.toggle("connected", bridge.status === "connected");
+  ui.bridgeStatus.classList.toggle("warn", bridge.status === "connecting");
+  ui.bridgeStatus.classList.toggle("danger", bridge.status === "error");
+  ui.bridgeButton.textContent = bridge.status === "connected" || bridge.status === "connecting" ? "Disconnect" : "Connect";
+}
+
+function sendRosbridge(payload) {
+  if (!bridge.socket || bridge.socket.readyState !== WebSocket.OPEN) return false;
+  bridge.socket.send(JSON.stringify(payload));
+  return true;
+}
+
+function connectRosbridge() {
+  disconnectRosbridge(false);
+  state.simSource = "gazebo";
+  ui.simSource.value = "gazebo";
+  bridge.status = "connecting";
+  bridge.commandAdvertised = false;
+  renderBridgeUi();
+
+  try {
+    bridge.socket = new WebSocket(ui.bridgeUrl.value.trim());
+  } catch (error) {
+    bridge.status = "error";
+    addEvent("Gazebo bridge URL is invalid.", "danger");
+    renderBridgeUi();
+    return;
+  }
+
+  bridge.socket.addEventListener("open", () => {
+    bridge.status = "connected";
+    bridge.commandAdvertised = true;
+    sendRosbridge({ op: "advertise", topic: "/cmd_vel", type: "geometry_msgs/Twist" });
+    sendRosbridge({ op: "subscribe", topic: "/tsi/telemetry", type: "std_msgs/String", throttle_rate: 100 });
+    addEvent("Gazebo bridge connected.");
+    renderBridgeUi();
+    renderUi();
+  });
+
+  bridge.socket.addEventListener("message", handleRosbridgeMessage);
+
+  bridge.socket.addEventListener("error", () => {
+    bridge.status = "error";
+    addEvent("Gazebo bridge connection failed.", "danger");
+    renderBridgeUi();
+  });
+
+  bridge.socket.addEventListener("close", () => {
+    if (state.simSource === "gazebo" && bridge.status !== "error" && !bridge.manualClose) {
+      addEvent("Gazebo bridge disconnected.", "warn");
+    }
+    bridge.socket = null;
+    bridge.status = bridge.status === "error" ? "error" : "offline";
+    bridge.commandAdvertised = false;
+    bridge.manualClose = false;
+    renderBridgeUi();
+  });
+}
+
+function disconnectRosbridge(announce = true) {
+  if (!bridge.socket) {
+    bridge.status = "offline";
+    bridge.commandAdvertised = false;
+    renderBridgeUi();
+    return;
+  }
+
+  if (bridge.socket.readyState === WebSocket.OPEN) {
+    sendRosbridge({ op: "unadvertise", topic: "/cmd_vel" });
+    sendRosbridge({ op: "unsubscribe", topic: "/tsi/telemetry" });
+  }
+
+  bridge.manualClose = true;
+  bridge.socket.close();
+  bridge.socket = null;
+  bridge.status = "offline";
+  bridge.commandAdvertised = false;
+  if (announce) addEvent("Gazebo bridge disconnected.");
+  renderBridgeUi();
+}
+
+function readNumber(payload, keys, fallback) {
+  for (const key of keys) {
+    if (Number.isFinite(Number(payload[key]))) return Number(payload[key]);
+  }
+  return fallback;
+}
+
+function applyBridgeTelemetry(payload) {
+  state.telemetry.latency = readNumber(payload, ["latencyMs", "latency"], state.telemetry.latency);
+  state.telemetry.linkQuality = readNumber(payload, ["linkQuality", "link"], state.telemetry.linkQuality);
+  state.telemetry.battery = readNumber(payload, ["battery", "batteryPercent"], state.telemetry.battery);
+  state.telemetry.humanDistance = readNumber(payload, ["humanDistance", "nearestHuman", "range"], state.telemetry.humanDistance);
+  state.telemetry.tilt = readNumber(payload, ["tilt", "tiltDeg"], state.telemetry.tilt);
+  state.telemetry.motorTemp = readNumber(payload, ["motorTemp", "motorTemperature"], state.telemetry.motorTemp);
+  state.telemetry.humanAngle = readNumber(payload, ["humanAngle"], state.telemetry.humanAngle);
+  state.telemetry.speed = readNumber(payload, ["speed", "linearSpeed"], state.telemetry.speed);
+  state.packetAge = 0;
+}
+
+function handleRosbridgeMessage(event) {
+  let packet;
+  try {
+    packet = JSON.parse(event.data);
+  } catch {
+    return;
+  }
+
+  if (packet.op !== "publish" || packet.topic !== "/tsi/telemetry" || !packet.msg) return;
+
+  try {
+    const payload = typeof packet.msg.data === "string" ? JSON.parse(packet.msg.data) : packet.msg;
+    applyBridgeTelemetry(payload);
+    renderUi();
+  } catch {
+    addEvent("Gazebo telemetry packet was ignored.", "warn");
+  }
+}
+
+function publishCommandOutput(force = false) {
+  if (state.simSource !== "gazebo" || bridge.status !== "connected") return;
+
+  const now = performance.now();
+  if (!force && now - bridge.lastCommandAt < 100) return;
+  bridge.lastCommandAt = now;
+
+  sendRosbridge({
+    op: "publish",
+    topic: "/cmd_vel",
+    msg: {
+      linear: { x: state.output.linear, y: 0, z: 0 },
+      angular: { x: 0, y: 0, z: state.output.angular }
+    }
+  });
+}
+
 function drift(current, target, step, noise = 0) {
   const next = current + (target - current) * step;
   return next + (Math.random() - 0.5) * noise;
 }
 
 function updateTelemetry() {
+  if (state.simSource === "gazebo") return;
+
   const target = scenarios[state.scenario];
   state.telemetry.latency = clamp(drift(state.telemetry.latency, target.latency, 0.32, 8), 25, 320);
   state.telemetry.linkQuality = clamp(drift(state.telemetry.linkQuality, target.linkQuality, 0.28, 2.5), 10, 100);
@@ -156,11 +323,14 @@ function updateTelemetry() {
 
 function getInterlocks() {
   const t = state.telemetry;
+  const bridgeOffline = state.simSource === "gazebo" && bridge.status !== "connected";
+  const telemetryStale = state.simSource === "gazebo" && state.packetAge > 3;
+
   return [
     {
       name: "Control link",
-      detail: `${fmt(t.latency)} ms / ${fmt(t.linkQuality)}% quality`,
-      level: t.latency > 220 || t.linkQuality < 50 ? "fail" : t.latency > 150 || t.linkQuality < 70 ? "warn" : "ok"
+      detail: bridgeOffline ? "Rosbridge offline" : telemetryStale ? `${fmt(state.packetAge)}s since packet` : `${fmt(t.latency)} ms / ${fmt(t.linkQuality)}% quality`,
+      level: bridgeOffline || telemetryStale || t.latency > 220 || t.linkQuality < 50 ? "fail" : t.latency > 150 || t.linkQuality < 70 ? "warn" : "ok"
     },
     {
       name: "Human proximity",
@@ -284,12 +454,14 @@ function renderUi() {
   const interlocks = getInterlocks();
   const risk = computeRisk(interlocks);
   const gate = computeGate(interlocks, risk);
-  const connectionLevel = state.telemetry.latency > 220 || state.telemetry.linkQuality < 50 ? "danger" : state.telemetry.latency > 150 || state.telemetry.linkQuality < 70 ? "warn" : "ok";
+  const bridgeUnavailable = state.simSource === "gazebo" && (bridge.status !== "connected" || state.packetAge > 3);
+  const connectionLevel = bridgeUnavailable || state.telemetry.latency > 220 || state.telemetry.linkQuality < 50 ? "danger" : state.telemetry.latency > 150 || state.telemetry.linkQuality < 70 ? "warn" : "ok";
 
   renderInterlocks(interlocks);
   renderTelemetry();
+  renderBridgeUi();
 
-  ui.connectionLabel.textContent = connectionLevel === "danger" ? "Link critical" : connectionLevel === "warn" ? "Link degraded" : "Connected";
+  ui.connectionLabel.textContent = bridgeUnavailable ? bridge.status === "connected" ? "Telemetry stale" : "Bridge offline" : connectionLevel === "danger" ? "Link critical" : connectionLevel === "warn" ? "Link degraded" : "Connected";
   setPill(ui.connectionPill, connectionLevel);
 
   ui.safetyLabel.textContent = gate.label;
@@ -310,6 +482,7 @@ function renderUi() {
   ui.desiredReadout.textContent = `${fmt(Math.hypot(state.desired.x, state.desired.y) * state.speedLimit, 2)} m/s`;
   ui.outputReadout.textContent = `${fmt(state.output.linear, 2)} m/s / ${fmt(state.output.angular, 2)} rad/s`;
   ui.clockLabel.textContent = nowLabel();
+  publishCommandOutput();
 
   ui.scenarioButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.scenario === state.scenario);
@@ -535,6 +708,7 @@ function bindEvents() {
     resetDesired();
     addEvent("Emergency stop engaged.", "danger");
     renderUi();
+    publishCommandOutput(true);
   });
 
   ui.resetButton.addEventListener("click", () => {
@@ -547,6 +721,26 @@ function bindEvents() {
     state.mode = ui.operationMode.value;
     addEvent(`Mode set to ${state.mode}.`);
     renderUi();
+  });
+
+  ui.simSource.addEventListener("change", () => {
+    state.simSource = ui.simSource.value;
+    if (state.simSource === "browser") {
+      disconnectRosbridge(false);
+      addEvent("Simulation source set to browser demo.");
+      updateTelemetry();
+    } else {
+      addEvent("Simulation source set to Gazebo bridge.", "warn");
+    }
+    renderUi();
+  });
+
+  ui.bridgeButton.addEventListener("click", () => {
+    if (bridge.status === "connected" || bridge.status === "connecting") {
+      disconnectRosbridge();
+      return;
+    }
+    connectRosbridge();
   });
 
   ui.scenarioButtons.forEach((button) => {

@@ -110,6 +110,17 @@
             <option value="docking">Docking</option>
             <option value="handover">Handover</option>
           </select>
+
+          <div class="sim-source-card">
+            <div class="field-row">
+              <label for="simSource">Simulation source</label>
+              <strong id="sourceStatus">Browser demo</strong>
+            </div>
+            <select id="simSource">
+              <option value="browser">Browser demo</option>
+              <option value="gazebo">Gazebo / ROS 2 bridge</option>
+            </select>
+          </div>
         </section>
 
         <section class="panel" aria-labelledby="telemetryTitle">
@@ -145,6 +156,24 @@
             <div class="metric">
               <span>Motor temp</span>
               <strong id="tempMetric">38 C</strong>
+            </div>
+          </div>
+
+          <div class="bridge-card">
+            <div class="timeline-heading">
+              <span>Gazebo Bridge</span>
+              <strong id="bridgeStatus">Offline</strong>
+            </div>
+            <label class="select-label" for="bridgeUrl">Rosbridge WebSocket</label>
+            <div class="bridge-connect-row">
+              <input id="bridgeUrl" type="url" value="ws://localhost:9090" spellcheck="false">
+              <button class="button secondary" id="bridgeButton" type="button">Connect</button>
+            </div>
+            <div class="bridge-topic-row">
+              <span>Telemetry</span>
+              <strong>/tsi/telemetry</strong>
+              <span>Command</span>
+              <strong>/cmd_vel</strong>
             </div>
           </div>
 

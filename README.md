@@ -11,6 +11,7 @@ This project is a human-machine interface prototype. It is not a certified safet
 - Command pad with speed limiting, deadman hold, arm/disarm, and emergency stop.
 - Scenario presets for nominal operation, crowded aisles, degraded communications, slope traversal, and low battery.
 - Canvas-based cell view with geofence, robot pose, obstacles, human proximity, and command vector.
+- Optional Gazebo Sim / ROS 2 bridge mode through rosbridge WebSocket.
 - Static deployment workflow for GitHub Pages.
 
 ## Run locally
@@ -29,20 +30,24 @@ If your environment has npm, `npm start` runs the same server and `npm run check
 
 ```text
 .
-├── index.html
-├── src/
-│   ├── app.js
-│   └── styles.css
-├── tools/
-│   └── server.mjs
-├── docs/
-│   ├── architecture.md
-│   └── safety-model.md
-├── .github/workflows/pages.yml
-├── .gitignore
-├── LICENSE
-├── SECURITY.md
-└── README.md
+|-- index.html
+|-- src/
+|   |-- app.js
+|   `-- styles.css
+|-- tools/
+|   `-- server.mjs
+|-- docs/
+|   |-- architecture.md
+|   `-- safety-model.md
+|-- sim/
+|   |-- README.md
+|   |-- gazebo/
+|   `-- ros2/
+|-- .github/workflows/pages.yml
+|-- .gitignore
+|-- LICENSE
+|-- SECURITY.md
+`-- README.md
 ```
 
 ## Upload to GitHub
@@ -57,6 +62,10 @@ git push -u origin main
 ```
 
 After pushing to GitHub, enable GitHub Pages from Actions. The included workflow publishes the static site from the repository root.
+
+## Simulation
+
+Gazebo Sim is included as an optional integration under `sim/`. The recommended robotics stack is modern Gazebo Sim plus ROS 2, `ros_gz_bridge`, and `rosbridge_suite`. See `sim/README.md` for the world file, bridge topics, and run commands.
 
 ## Safety note
 
