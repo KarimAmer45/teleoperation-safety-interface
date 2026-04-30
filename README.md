@@ -70,3 +70,24 @@ Gazebo Sim is included as an optional integration under `sim/`. The recommended 
 ## Safety note
 
 The browser app demonstrates operator workflow and interface behavior only. A production teleoperation stack should place real safety enforcement in robot firmware, a safety PLC, or another independent runtime that continues to operate if the browser, network, or operator workstation fails.
+
+## Result screenshots
+
+![teleoperation-safety-interface result screenshot](docs/results/result-screenshot.png)
+
+Operator-interface state for connection, command, and safety feedback.
+
+
+## What this demonstrates
+
+- A browser-based teleoperation UI focused on safety state visibility.
+- Controls for emergency stop, speed limiting, and operator command feedback.
+- Documentation for connecting the interface concept to ROS/Gazebo infrastructure.
+
+
+## Limitations and next steps
+
+- The browser UI demonstrates operator workflow; true safety enforcement must live outside the browser.
+- Live robot integration depends on rosbridge and the surrounding ROS stack.
+- Next steps: add a recorded interface walkthrough and hardware-disconnect failure tests.
+
