@@ -73,7 +73,7 @@ The browser app demonstrates operator workflow and interface behavior only. A pr
 
 ---
 
-## Benchmarks (Live — May 2026)
+## Project Stats
 
 Code quality verified with Node.js built-in syntax checker (`node --check`).
 
