@@ -50,18 +50,9 @@ If your environment has npm, `npm start` runs the same server and `npm run check
 `-- README.md
 ```
 
-## Upload to GitHub
+## GitHub Pages
 
-```bash
-git init
-git add .
-git commit -m "Initial teleoperation safety interface"
-git branch -M main
-git remote add origin https://github.com/<your-user>/<your-repo>.git
-git push -u origin main
-```
-
-After pushing to GitHub, enable GitHub Pages from Actions. The included workflow publishes the static site from the repository root.
+GitHub Pages is served from Actions; the included workflow publishes the static site from the repository root.
 
 ## Simulation
 

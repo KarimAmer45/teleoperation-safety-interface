@@ -3,7 +3,7 @@
   <name>tsi_bridge</name>
   <version>0.1.0</version>
   <description>Telemetry bridge for the Teleoperation Safety Interface Gazebo simulation.</description>
-  <maintainer email="maintainer@example.com">Teleoperation Safety Interface contributors</maintainer>
+  <maintainer email="karimamer456@gmail.com">Teleoperation Safety Interface contributors</maintainer>
   <license>MIT</license>
 
   <depend>rclpy</depend>

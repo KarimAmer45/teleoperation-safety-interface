@@ -15,7 +15,7 @@ setup(
     install_requires=["setuptools"],
     zip_safe=True,
     maintainer="Teleoperation Safety Interface contributors",
-    maintainer_email="maintainer@example.com",
+    maintainer_email="karimamer456@gmail.com",
     description="Telemetry bridge for the Teleoperation Safety Interface Gazebo simulation.",
     license="MIT",
     entry_points={
